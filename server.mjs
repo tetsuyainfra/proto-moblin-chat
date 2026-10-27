@@ -1,6 +1,5 @@
 import { WebSocketServer } from "ws";
 import http from "node:http";
-import { escapeXML, escapeXMLText } from "@xmpp/xml";
 import parse from "@xmpp/xml/lib/parse.js";
 import jid from "@xmpp/jid";
 import mqtt from "mqtt";
