@@ -1,0 +1,7 @@
+[env]
+# MQTT_TOPIC = "bbs/umesure005"
+MQTT_TOPIC = "bbs/umesure005,bbs/hololiveneet"
+
+MQTT_URL      = "SEE https://doc.bbs.jpnkn.com"
+MQTT_USERNAME = "SEE https://doc.bbs.jpnkn.com"
+MQTT_PASSWORD = "SEE https://doc.bbs.jpnkn.com"

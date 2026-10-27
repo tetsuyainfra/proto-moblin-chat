@@ -3,13 +3,18 @@ import http from "node:http";
 import { escapeXML, escapeXMLText } from "@xmpp/xml";
 import parse from "@xmpp/xml/lib/parse.js";
 import jid from "@xmpp/jid";
+import mqtt from "mqtt";
 // const { XMLParser } = require("fast-xml-parser");
 
 
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT || 5443);
 const wsPath = process.env.WS_PATH || '/ws';
-const apiToken = process.env.API_TOKEN;
+
+const MQTT_URL = process.env.MQTT_URL;
+const MQTT_USERNAME = process.env.MQTT_USERNAME;
+const MQTT_PASSWORD = process.env.MQTT_PASSWORD;
+const MQTT_TOPIC = process.env.MQTT_TOPIC.split(",");
 
 const sessions = new WeakMap();
 
@@ -75,6 +80,34 @@ function on_presence_received(msg, session, socket, remote) {
     socket.send(`<presence xmlns="jabber:client"/>`);
 
     if (!session.sendHandle) {
+        console.log(`${remote} Creating MQTT client`);
+        const client = mqtt.connect(MQTT_URL, {
+            username: MQTT_USERNAME,
+            password: MQTT_PASSWORD,
+        });
+
+        client.on("connect", () => {
+            console.log(`${remote} Connected to MQTT broker`);
+            client.subscribe(MQTT_TOPIC, (err) => {
+                if (err) console.error(`${remote} subscribe error:`, err);
+                else console.log(`${remote} subscribed: ${MQTT_TOPIC}`);
+            });
+        });
+
+        client.on("message", (topic, payload) => {
+            // 受信するメッセージ
+            // {"body":"DEV名無しさん<><>2026/10/26(月) 14:58:10.20<>デバッグ用すれ<>デバッグ用/1","no":"1","bbsid":"tetsuyainfra","threadkey":"1792994290"}
+            console.log(`${remote} Received MQTT message:`, payload.toString());
+            let res = JSON.parse(payload.toString());
+            let [name, mail , date_id, body, thread_name] = (res.body || "").split("<>");
+            let bbsid = res["bbsid"];
+            let thread_key = res["threadkey"];
+            let no = res["no"];
+
+            sendMessage(socket, `system@example.com/${no}`, session.jid.toString(), "chat", `${bbsid}_${thread_key}_${no}`, `${body}`);
+        });
+        session.mqttClient = client;
+
         sendMessage(socket, `system@example.com/system`, session.jid.toString(), "chat", `msg0`, `${session.username}さん！こんにちは`);
         let count = 1;
         session.sendHandle = setInterval(() => {
@@ -118,10 +151,16 @@ wsServer.on("connection", (socket) => {
     let state = HANDSHAKE;
     let session = {
         jid: null,
-        sendHandle: null
+        mqttClient: null,
+        sendHandle: null,
     };
 
     socket.on("close", (code) => {
+        if (session.mqttClient) {
+            session.mqttClient.end(true);
+            session.mqttClient = null;
+            console.log(`${remote} Disconnected MQTT client`);
+        }
         if (session.sendHandle) {
             clearInterval(session.sendHandle);
             session.sendHandle = null;
